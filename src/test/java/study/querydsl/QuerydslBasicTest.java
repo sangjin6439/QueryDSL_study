@@ -7,6 +7,8 @@ import static study.querydsl.entity.QTeam.team;
 
 import com.querydsl.core.QueryResults;
 import com.querydsl.core.Tuple;
+import com.querydsl.core.types.dsl.CaseBuilder;
+import com.querydsl.core.types.dsl.Expressions;
 import com.querydsl.jpa.impl.JPAQueryFactory;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -67,7 +69,6 @@ public class QuerydslBasicTest {
             System.out.println("member = " + member);
             System.out.println("-> member.team = " + member.getTeam());
         }
-
     }
 
     @Test
@@ -127,7 +128,7 @@ public class QuerydslBasicTest {
                 .selectFrom(member)
                 .fetch();
 
-    /*단 건 <- 현재 test에서 @beforeEach로 memeber1,2,3,4가 테스트 전에 수행되고 persist가 되기에
+    /* 단 건 <- 현재 test에서 @beforeEach로 memeber1,2,3,4가 테스트 전에 수행되고 persist가 되기에
        조회하는 member가 4개가 돼서 결과가 둘 이상이라 NonUniqueResultException 예외 발생
     */
         Member findMember1 = queryFactory
@@ -139,7 +140,7 @@ public class QuerydslBasicTest {
                 .selectFrom(member)
                 .fetchFirst();
 
-        // 페이징에서 사용 <-deprecated
+        // 페이징에서 사용(따라서 fetch는 실행된 쿼리의 결과를 가져오는 데 사용되는 메서드이고, ResultFetch는 결과를 처리하고 다양한 방식으로 조작할 수 있는 타입) <-deprecated
         QueryResults<Member> results = queryFactory
                 .selectFrom(member)
                 .fetchResults();
@@ -226,7 +227,6 @@ public class QuerydslBasicTest {
         assertThat(tuple.get(member.age.avg())).isEqualTo(25);
         assertThat(tuple.get(member.age.max())).isEqualTo(40);
         assertThat(tuple.get(member.age.min())).isEqualTo(10);
-
     }
 
     /*
@@ -362,11 +362,11 @@ public class QuerydslBasicTest {
     }
 
     /*
-    * 나이가 가장 많은 회원 조회
-    * */
+     * 나이가 가장 많은 회원 조회
+     * */
     @Test
     //JPAExpreesions를 스태틱 임포트로 만들어서 가능한거임.
-    public void subQuery(){
+    public void subQuery() {
         //엘리어스가 겹치면 안되기 때문에 따로 만들어 줌.
         QMember memberSub = new QMember("memberSub");
 
@@ -375,7 +375,7 @@ public class QuerydslBasicTest {
                 .where(member.age.eq(
                         //이 부분 JPAExpreesions
                         select(memberSub.age.max())
-                        .from(memberSub)
+                                .from(memberSub)
                 ))
                 .fetch();
 
@@ -388,7 +388,7 @@ public class QuerydslBasicTest {
      * 나이가 평균 이상인 회원
      * */
     @Test
-    public void subQueryGoe(){
+    public void subQueryGoe() {
         //엘리어스가 겹치면 안되기 때문에 따로 만들어 줌.
         QMember memberSub = new QMember("memberSub");
 
@@ -402,12 +402,12 @@ public class QuerydslBasicTest {
                 .fetch();
 
         assertThat(result).extracting("age")
-                .containsExactly(30,40);
+                .containsExactly(30, 40);
 
     }
 
     @Test
-    public void selectSubQuery(){
+    public void selectSubQuery() {
         QMember memberSub = new QMember("memberSub");
 
         List<Tuple> result = queryFactory
@@ -422,16 +422,74 @@ public class QuerydslBasicTest {
     }
 
     /*
-    * from 절의 서브 쿼리 한계
-    * JPA JQPL 서브쿼리의 한계점으로 from절의 서브 쿼리(인라인 뷰)는 지원하지 않는다.
-    *
-    * 해결 방안
-    * 서브쿼리를 join으로 변경한다.(가능한 상황이 많다. 불가능할 수도 있음.)
-    * 애플리케이션에서 쿼리를 2번 분리해서 실행한다.
-    * 최후로는 nativeSQL을 사용한다.
-    *
-    * DB는 데이터만 필터링하고 그루핑하는거고, 로직들은 애플리케이션에서 프레젠테이션로직은 프레젠테이션에서만 해결해야한다. DB는 데이터를 퍼올리는 역할만 집중!
-    * 한방 쿼리의 함정! 너무 긴 쿼리 한번보다 나누어서 여러 쿼리로 만드는게 더 좋을 수 있다.
-    *  */
+     * from 절의 서브 쿼리 한계
+     * JPA JQPL 서브쿼리의 한계점으로 from절의 서브 쿼리(인라인 뷰)는 지원하지 않는다.
+     *
+     * 해결 방안
+     * 서브쿼리를 join으로 변경한다.(가능한 상황이 많다. 불가능할 수도 있음.)
+     * 애플리케이션에서 쿼리를 2번 분리해서 실행한다.
+     * 최후로는 nativeSQL을 사용한다.
+     *
+     * DB는 데이터만 필터링하고 그루핑하는거고, 로직들은 애플리케이션에서 프레젠테이션로직은 프레젠테이션에서만 해결해야한다. DB는 데이터를 퍼올리는 역할만 집중!
+     * 한방 쿼리의 함정! 너무 긴 쿼리 한번보다 나누어서 여러 쿼리로 만드는게 더 좋을 수 있다.
+     *  */
+
+    // 이런 부분은 DB보다는 서비스 로직에서 진행하는게 좋다고 함. DB에서는 조회만.. 어쩔 때는 DB에서 하는게 나을 수도 있음
+    @Test
+    public void basicCase() {
+        List<String> result = queryFactory
+                .select(member.age
+                        .when(10).then("열상")
+                        .when(20).then("스무살")
+                        .otherwise("기타"))
+                .from(member)
+                .fetch();
+        for (String s : result) {
+            System.out.println("s = " + s);
+        }
+    }
+
+    @Test
+    public void complexCase() {
+        List<String> result = queryFactory
+                .select(new CaseBuilder()
+                        .when(member.age.between(0, 20)).then("0~20살")
+                        .when(member.age.between(21, 30)).then("20~30살")
+                        .otherwise("기타"))
+                .from(member)
+                .fetch();
+
+        for (String s : result) {
+            System.out.println("s= " + s);
+        }
+    }
+
+    @Test
+    public void constant() {
+        List<Tuple> result = queryFactory
+                .select(member.username, Expressions.constant("A"))
+                .from(member)
+                .fetch();
+
+        for (Tuple tuple : result) {
+            System.out.println("tuple = " + tuple);
+        }
+    }
+
+    /*concat은 문자열을 처리할 때 사용되지만 member.age.stringValue())
+      age와 같은 숫자나 ENUM타입은 .stringValue()를 사용하여 처리 가능하다.
+     */
+    @Test
+    public void concat(){
+        //{username}_{age}
+        List<String> result = queryFactory
+                .select(member.username.concat("_").concat(member.age.stringValue()))
+                .from(member)
+                .where(member.username.eq("member1"))
+                .fetch();
+        for (String s : result) {
+            System.out.println("s = "+ s);
+        }
+    }
 
 }
