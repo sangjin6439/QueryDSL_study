@@ -36,6 +36,8 @@ public class QuerydslBasicTest {
     //따로 빼서 사용하는 걸 권장
     JPAQueryFactory queryFactory;
 
+    //튜플이나 이러한 QueryDSL은 repository안에서만 알게 하고 DTO로 반환해서 사용하기
+
     @BeforeEach
     public void before() {
         //초기화
@@ -192,7 +194,7 @@ public class QuerydslBasicTest {
     @Test
     public void paging2() {
         //페이징 쿼리가 단순하면 이렇게 짜면되지만, 컨텐츠 쿼리가 복잡한데 카운트 쿼리는 단순하게 짤 수 있으면
-        //따로 작성하는게 좋다. <- 성능상 애매해질 수 있어서 따로 작성
+        //따로 작성하는게 좋다. <- 성능상 애매해질 수 있어서
         QueryResults<Member> queryResults = queryFactory
                 .selectFrom(member)
                 .orderBy(member.username.desc())
@@ -480,7 +482,7 @@ public class QuerydslBasicTest {
       age와 같은 숫자나 ENUM타입은 .stringValue()를 사용하여 처리 가능하다.
      */
     @Test
-    public void concat(){
+    public void concat() {
         //{username}_{age}
         List<String> result = queryFactory
                 .select(member.username.concat("_").concat(member.age.stringValue()))
@@ -488,8 +490,36 @@ public class QuerydslBasicTest {
                 .where(member.username.eq("member1"))
                 .fetch();
         for (String s : result) {
-            System.out.println("s = "+ s);
+            System.out.println("s = " + s);
         }
+    }
+
+    //프로젝션(select 대상 지정)과 결과 반환
+    @Test
+    public void simpleProjection() {
+        List<String> result = queryFactory.select(member.username)
+                .from(member)
+                .fetch();
+
+        for (String s : result) {
+            System.out.println("s = " + s);
+        }
+    }
+
+    @Test
+    public void tupleProjection() {
+        List<Tuple> result = queryFactory
+                .select(member.username, member.age)
+                .from(member)
+                .fetch();
+
+        for (Tuple tuple : result) {
+            String username = tuple.get(member.username);
+            Integer age = tuple.get(member.age);
+            System.out.println("username = " + username);
+            System.out.println("age = " + age);
+        }
+
     }
 
 }
