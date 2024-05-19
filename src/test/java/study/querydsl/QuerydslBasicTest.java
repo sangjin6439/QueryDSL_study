@@ -5,10 +5,16 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static study.querydsl.entity.QMember.member;
 import static study.querydsl.entity.QTeam.team;
 
+import com.querydsl.core.BooleanBuilder;
 import com.querydsl.core.QueryResults;
 import com.querydsl.core.Tuple;
+import com.querydsl.core.types.ExpressionUtils;
+import com.querydsl.core.types.Predicate;
+import com.querydsl.core.types.Projections;
+import com.querydsl.core.types.dsl.BooleanExpression;
 import com.querydsl.core.types.dsl.CaseBuilder;
 import com.querydsl.core.types.dsl.Expressions;
+import com.querydsl.jpa.JPAExpressions;
 import com.querydsl.jpa.impl.JPAQueryFactory;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -16,6 +22,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.annotation.Commit;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
@@ -23,6 +30,9 @@ import java.util.List;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityManagerFactory;
 import jakarta.persistence.PersistenceUnit;
+import study.querydsl.dto.MemberDto;
+import study.querydsl.dto.QMemberDto;
+import study.querydsl.dto.UserDto;
 import study.querydsl.entity.Member;
 import study.querydsl.entity.QMember;
 import study.querydsl.entity.Team;
@@ -522,4 +532,214 @@ public class QuerydslBasicTest {
 
     }
 
+    //순수 JPA에서 DTO조회할 때에는 new생성자를 사용함
+    @Test
+    public void findDtoByJQPL() {
+        List<MemberDto> resultList = em.createQuery("select new study.querydsl.dto.MemberDto(m.username,m.age) from Member m", MemberDto.class)
+                .getResultList();
+
+        for (MemberDto memberDto : resultList) {
+            System.out.println("memberDto = " + memberDto);
+        }
+    }
+
+    //Projections.bean은 getter setter를 통해 값을 받아옴 = @DATA 필수적
+    @Test
+    public void findDtoBySetter() {
+        List<MemberDto> result = queryFactory
+                .select(Projections.bean(MemberDto.class,
+                        member.username,
+                        member.age))
+                .from(member)
+                .fetch();
+
+        for (MemberDto memberDto : result) {
+            System.out.println("memberDto = " + memberDto);
+        }
+    }
+
+    //Projections.fields은 getter, setter없이 필드에 값이 들어감
+    @Test
+    public void findDtoByField() {
+        List<MemberDto> result = queryFactory
+                .select(Projections.fields(MemberDto.class,
+                        member.username,
+                        member.age))
+                .from(member)
+                .fetch();
+
+        for (MemberDto memberDto : result) {
+            System.out.println("memberDto = " + memberDto);
+        }
+    }
+
+    //Projections.constructor는 생성자를 통한 방식. 생성자 필가
+    @Test
+    public void findDtoByConstructor() {
+        List<MemberDto> result = queryFactory
+                .select(Projections.constructor(MemberDto.class,
+                        member.username,
+                        member.age))
+                .from(member)
+                .fetch();
+
+        for (MemberDto memberDto : result) {
+            System.out.println("memberDto = " + memberDto);
+        }
+    }
+
+    // 필드명이 다르면 as("원하는 필드명")를 사용하기. 아니면 null값이 들어간다
+    @Test
+    public void findUserDtoByField() {
+        QMember memberSub = new QMember("memberSub");
+        List<UserDto> result = queryFactory
+                .select(Projections.fields(UserDto.class,
+                        member.username.as("name"),
+                        // member.age를 사용해도 되지만 서브쿼리를 만들어도 된다.
+                        ExpressionUtils.as(JPAExpressions.select(memberSub.age.max())
+                                .from(memberSub), "age")
+                ))
+                .from(member)
+                .fetch();
+
+        for (UserDto userDto : result) {
+            System.out.println("memberDto = " + userDto);
+        }
+    }
+
+    /*constructor와 비슷한 방식과의 차이
+     장점: constructor는 런타임시 오류가 발생하고 QueryProjection은 컴파일 오류가 뜸
+     단점: DTO가 QueryDSL에 의존성이 생김 -> 실용적으로 이런식으로 가져가도 되고 constructor방식을 사용해서 의존성없이 깔끔하게 가져갈 수 있다.
+   */
+    @Test
+    public void findDtoByQueryProjection() {
+        List<MemberDto> result = queryFactory
+                .select(new QMemberDto(member.username, member.age))
+                .from(member)
+                .fetch();
+
+        for (MemberDto memberDto : result) {
+            System.out.println("memberDto = " + memberDto);
+        }
+    }
+
+    // QueryDSL의 동적쿼리 사용
+    @Test
+    public void dynamicQuery_BooleanBuilder() {
+        String usernameParam = "member1";
+        Integer ageParam = 10;
+
+        List<Member> result = searchMember1(usernameParam, ageParam);
+        assertThat(result.size()).isEqualTo(1);
+    }
+
+    //BooleanBuilder를 사용하여 원하는 조건 추가하기
+    private List<Member> searchMember1(String usernameCond, Integer ageCond) {
+
+        BooleanBuilder builder = new BooleanBuilder();
+        if (usernameCond != null) {
+            builder.and(member.username.eq(usernameCond));
+        }
+        if (ageCond != null) {
+            builder.and(member.age.eq(ageCond));
+        }
+
+        return queryFactory
+                .selectFrom(member)
+                .where(builder)
+                .fetch();
+    }
+
+    @Test
+    public void dynamicQuery_WhereParam() {
+        String usernameParam = "member1";
+        Integer ageParam = null;
+
+        List<Member> result = searchMember2(usernameParam, ageParam);
+        assertThat(result.size()).isEqualTo(1);
+    }
+
+    private List<Member> searchMember2(String usernameCond, Integer ageCond) {
+        return queryFactory
+                .selectFrom(member)
+//                .where(usernameEq(usernameCond), ageEq(ageCond))
+                .where(allEq(usernameCond,ageCond))
+                .fetch();
+    }
+
+    private BooleanExpression usernameEq(final String usernameCond) {
+        if (usernameCond == null) {
+            return null;
+        }
+        return member.username.eq(usernameCond);
+    }
+
+    // 삼항연산자 사용
+    private BooleanExpression ageEq(final Integer ageCond) {
+        return ageCond != null ? member.age.eq(ageCond) : null;
+    }
+
+    //조합 가능 . 조합할때 조합하는 메서드는 precicate가 아니라 BooleanExpression이 자료형이여야함
+    private Predicate allEq(final String usernameCond, final Integer ageCond) {
+        return usernameEq(usernameCond).and(ageEq(ageCond));
+    }
+
+    //bulk처리 -> 한번에 여러 데이터를 수정,삭제함
+    @Test
+    @Commit
+    public void bulkUpdate(){
+        //전
+        //member1 = 10 -> DB member1
+        //member2 = 20 -> DB member2
+        //member3 = 30 -> DB member3
+        //member4 = 40 -> DB member4
+
+        long count = queryFactory
+                .update(member)
+                .set(member.username, "비회원")
+                .where(member.age.lt(28))
+                .execute();
+        em.flush();
+        em.clear();
+        //후
+        //member1 = 10 -> DB 비회원
+        //member2 = 20 -> DB 비회원
+        //member3 = 30 -> DB member3
+        //member4 = 40 -> DB member4
+
+        // 벌크 연산 시 DB에 값을 바꾸고 영속성 컨텍스트는 바꾸지 않기 때문에 둘의 값이 다르다. em.flush, em.clear를 사용해서 영속성 컨텍스트를 제거함
+        // * 영속성 컨텍스트와 DB의 값이 다르다면 DB의 값이 버려지고 영속성 컨텍스트의 값이 유지된다.*
+
+        List<Member> result = queryFactory
+                .selectFrom(member).fetch();
+
+        for (Member member1 : result) {
+            System.out.println("member1 = "+member1);
+        }
+    }
+
+    @Test
+    public void bulkAdd(){
+        long count = queryFactory
+                .update(member)
+                .set(member.age, member.age.multiply(2))
+                .execute();
+        em.flush();
+        em.clear();
+        // em.flush, em.clear 안하면 값 변경안됨
+        List<Member> result = queryFactory
+                .selectFrom(member)
+                .fetch();
+        for (Member member1 : result) {
+            System.out.println(member1.getAge());
+        }
+    }
+
+    @Test
+    public void bulkDelete(){
+        long count = queryFactory
+                .delete(member)
+                .where(member.age.gt(18))
+                .execute();
+    }
 }
