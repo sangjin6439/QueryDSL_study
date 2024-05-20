@@ -679,7 +679,7 @@ public class QuerydslBasicTest {
         return ageCond != null ? member.age.eq(ageCond) : null;
     }
 
-    //조합 가능 . 조합할때 조합하는 메서드는 precicate가 아니라 BooleanExpression이 자료형이여야함
+    //조합 가능 . 조합할때 조합하는 메서드는 predicate가 아니라 BooleanExpression이 자료형이여야함
     private Predicate allEq(final String usernameCond, final Integer ageCond) {
         return usernameEq(usernameCond).and(ageEq(ageCond));
     }
@@ -741,5 +741,31 @@ public class QuerydslBasicTest {
                 .delete(member)
                 .where(member.age.gt(18))
                 .execute();
+    }
+
+    @Test
+    public void sqlFunction(){
+        List<String> result = queryFactory.select(Expressions.stringTemplate("function('replace',{0},{1},{2})",
+                        member.username, "member", "M"))
+                .from(member)
+                .fetch();
+
+        for (String s : result) {
+            System.out.println("s = "+s);
+        }
+    }
+
+    @Test
+    public void sqlFunction2(){
+        List<String> result = queryFactory
+                .select(member.username)
+                .from(member)
+//                .where(member.username.eq(Expressions.stringTemplate("function('lower',{0})",member.username)))
+                .where(member.username.eq(member.username.lower()))
+                .fetch();
+
+        for (String s : result) {
+            System.out.println("s = "+s);
+        }
     }
 }
