@@ -15,6 +15,7 @@ import jakarta.persistence.EntityManager;
 import study.querydsl.dto.MemberSearchCondition;
 import study.querydsl.dto.MemberTeamDto;
 import study.querydsl.entity.Member;
+import study.querydsl.entity.QMember;
 import study.querydsl.entity.Team;
 
 @SpringBootTest
@@ -97,5 +98,30 @@ class MemberRepositoryTest {
 
         assertThat(result.getSize()).isEqualTo(3);
         assertThat(result.getContent()).extracting("username").containsExactly("member1", "member2", "member3");
+    }
+
+    @Test //실무에서는 거의 사용하지 않음 -> 테이블이 단일이거나 적으면 효율좋은데. 조인이 섞이면 잘 작동을 안해서 따로 분리해서 만듦.
+    public void querydslPredicateExecutorTest(){
+        Team teamA = new Team("teamA");
+        Team teamB = new Team("teamB");
+        em.persist(teamA);
+        em.persist(teamB);
+
+        Member member1 = new Member("member1", 10, teamA);
+        Member member2 = new Member("member2", 20, teamA);
+
+        Member member3 = new Member("member3", 30, teamB);
+        Member member4 = new Member("member4", 40, teamB);
+
+        em.persist(member1);
+        em.persist(member2);
+        em.persist(member3);
+        em.persist(member4);
+
+        QMember member = QMember.member;
+        Iterable<Member> result = memberRepository.findAll(member.age.between(10,40).and(member.username.eq("member1")));
+        for (Member findMember : result) {
+            System.out.println("member1 = "+ findMember);
+        }
     }
 }
