@@ -1,4 +1,4 @@
-package study.querydsl.controller;
+package study.querydsl;
 
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;

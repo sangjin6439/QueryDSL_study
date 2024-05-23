@@ -181,8 +181,6 @@ public class MemberRepositoryImpl extends QuerydslRepositorySupport implements M
     private BooleanExpression ageLoe(final Integer ageLoe) {
         return ageLoe != null ? member.age.goe(ageLoe) : null;
     }
-
-
 }
 
 

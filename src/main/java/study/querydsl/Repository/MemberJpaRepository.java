@@ -114,7 +114,7 @@ public class MemberJpaRepository {
     }
 
     private BooleanExpression usernameEq(final String username) {
-        //긍정 hasText, 부정은 isEmplty
+        //긍정 hasText, 부정은 isEmpty
         return hasText(username) ? member.username.eq(username) : null;
     }
 
